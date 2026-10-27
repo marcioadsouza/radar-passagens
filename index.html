@@ -61,6 +61,15 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 tr[data-key]{cursor:pointer}
 tr[data-key]:hover td,tr.sel td{background:var(--grid)}
 .num{text-align:right}
+.datebar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.field input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-height:40px}
+.btn{font:inherit;font-size:14px;padding:8px 18px;min-height:40px;border-radius:999px;border:1px solid var(--fg);background:var(--fg);color:var(--bg);cursor:pointer}
+.btn.sec{background:var(--panel);color:var(--fg);border-color:var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.aviso{margin:0;font-size:14px;max-width:80ch}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr));gap:16px}
+code{font-size:12px;background:var(--grid);padding:2px 6px;border-radius:4px;word-break:break-all}
 footer{font-size:13px;color:var(--muted)}
 @media (max-width:640px){.hide{display:none}}
 </style>
@@ -72,8 +81,26 @@ footer{font-size:13px;color:var(--muted)}
     <h1>Radar de Passagens Brasília</h1>
     <p class="take" id="take">Carregando os preços…</p>
     <p class="method">Preço ida e volta por pessoa, em reais, da viagem de uma semana mais barata nos próximos seis meses, como o Google Voos mostra no Explorar saindo de Brasília. A variação compara com a coleta anterior. Os preços são atualizados uma vez por dia.</p>
-    <nav class="jump" aria-label="Ir para"><a href="#internacional">Internacional</a><a href="#nacional">Nacional</a></nav>
+    <nav class="jump" aria-label="Ir para"><a href="#periodo">Escolher datas</a><a href="#internacional">Internacional</a><a href="#nacional">Nacional</a></nav>
   </header>
+
+  <section id="periodo">
+    <div class="sec-h"><h2>Escolha as datas</h2><p class="note">Ida e volta saindo de Brasília</p></div>
+    <form class="datebar" id="per-form">
+      <label class="field">Data de ida<input type="date" id="per-ida" required></label>
+      <label class="field">Data de volta<input type="date" id="per-volta" required></label>
+      <button class="btn" type="submit">Ver preços</button>
+      <button class="btn sec" type="button" id="per-limpar">Limpar</button>
+    </form>
+    <div class="chips" id="per-chips"></div>
+    <div id="per-out" hidden>
+      <p class="aviso" id="per-aviso"></p>
+      <div class="cols" style="margin-top:12px">
+        <div class="panel"><h3>Internacional</h3><div class="tablebox"><table id="per-int"><thead><tr><th><span class="th">Destino</span></th><th class="hide"><span class="th">Região</span></th><th class="num"><span class="th">Preço</span></th><th class="num"><span class="th">Variação</span></th><th><span class="th">Datas</span></th><th class="hide"><span class="th">Escalas</span></th></tr></thead><tbody></tbody></table></div></div>
+        <div class="panel"><h3>Nacional</h3><div class="tablebox"><table id="per-nac"><thead><tr><th><span class="th">Destino</span></th><th class="num"><span class="th">Preço</span></th><th class="num"><span class="th">Variação</span></th><th><span class="th">Datas</span></th><th class="hide"><span class="th">Escalas</span></th></tr></thead><tbody></tbody></table></div></div>
+      </div>
+    </div>
+  </section>
 
   <section id="internacional">
     <div class="sec-h"><h2>Internacional</h2><div class="tabs" id="int-tabs" aria-label="Região"></div></div>
@@ -249,9 +276,93 @@ Object.keys(SEC).forEach((k) => {
 let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(draw,150); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
 
-fetch('precos.json?v=' + Date.now()).then((r)=>r.json()).then((d) => {
+
+/* Filtro por período */
+const REPO = 'https://github.com/marcioadsouza/radar-passagens';
+const MESES = {'jan':0,'fev':1,'mar':2,'abr':3,'mai':4,'jun':5,'jul':6,'ago':7,'set':8,'out':9,'nov':10,'dez':11};
+let PERIODOS = [], PPRECOS = [];
+const iso = (d) => d.toISOString().slice(0,10);
+const dm = (s) => s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4);
+function datasDoPeriodo(txt, coleta){
+  const t = txt.replace(/\./g,'').trim(), m = t.match(/^(\d+)(?: de (\w+))?(?: de (\d{4}))? – (\d+) de (\w+)(?: de (\d{4}))?$/);
+  if (!m) return null;
+  const m2 = MESES[m[5].slice(0,3)], m1 = m[2] ? MESES[m[2].slice(0,3)] : m2;
+  let y2 = m[6] ? +m[6] : +coleta.slice(0,4); if (!m[6] && m2 < +coleta.slice(5,7)-1) y2++;
+  const y1 = m[3] ? +m[3] : (m1 > m2 ? y2-1 : y2);
+  return [iso(new Date(Date.UTC(y1,m1,+m[1]))), iso(new Date(Date.UTC(y2,m2,+m[4])))];
+}
+function linhaPer(tbody, r, k){
+  const tr = document.createElement('tr'), cells = [[r.destino,'']];
+  if (k==='int') cells.push([r.regiao,'hide']);
+  cells.push([brl(r.preco),'num'],[r.variacao===undefined?'':delta(r.variacao),'num '+cls(r.variacao)],[r.datas,''],[r.escalas,'hide']);
+  cells.forEach(([t,c]) => { const td=document.createElement('td'); td.textContent=t; if(c) td.className=c; tr.appendChild(td); });
+  tbody.appendChild(tr);
+}
+function aplicarPeriodo(ida, volta){
+  const out = document.getElementById('per-out'), aviso = document.getElementById('per-aviso');
+  document.getElementById('per-ida').value = ida || ''; document.getElementById('per-volta').value = volta || '';
+  const u = new URL(location.href);
+  if (!ida || !volta) { out.hidden = true; u.searchParams.delete('ida'); u.searchParams.delete('volta'); history.replaceState(null,'',u); return; }
+  u.searchParams.set('ida',ida); u.searchParams.set('volta',volta); history.replaceState(null,'',u);
+  out.hidden = false;
+  if (volta < ida) { aviso.textContent = 'A data de volta precisa ser depois da data de ida.'; ['per-int','per-nac'].forEach((id)=>document.querySelector('#'+id+' tbody').replaceChildren()); return; }
+  // períodos monitorados que cabem nas datas escolhidas
+  const cabem = PERIODOS.filter((p)=>p.ida>=ida && p.volta<=volta);
+  const exato = PERIODOS.find((p)=>p.ida===ida && p.volta===volta);
+  let linhas = [], modo;
+  const comDados = cabem.filter((p)=>PPRECOS.some((r)=>r.ida===p.ida && r.volta===p.volta));
+  if (comDados.length) {
+    modo = 'exato';
+    const melhor = {};
+    comDados.forEach((p) => {
+      const hist = PPRECOS.filter((r)=>r.ida===p.ida && r.volta===p.volta);
+      const ult = hist.map((r)=>r.data).sort().pop();
+      hist.filter((r)=>r.data===ult).forEach((r) => {
+        const ant = hist.filter((x)=>x.destino===r.destino && x.data<ult).sort((a,b)=>a.data<b.data?-1:1).pop();
+        const l = {destino:r.destino,regiao:r.regiao,preco:+r.preco,variacao:ant?(+r.preco)-(+ant.preco):null,escalas:r.escalas,
+          datas:dm(p.ida).slice(0,5)+' a '+dm(p.volta),coleta:ult};
+        if (!melhor[r.destino] || l.preco < melhor[r.destino].preco) melhor[r.destino] = l;
+      });
+    });
+    linhas = Object.values(melhor);
+    const col = linhas.map((l)=>l.coleta).sort().pop();
+    aviso.textContent = (exato ? 'Preços exatos para estas datas' : 'Preços exatos dos períodos monitorados que cabem nas suas datas') + ', ida e volta por pessoa, coletados em '+dm(col)+'. A variação compara com a coleta anterior deste mesmo período.';
+  } else {
+    modo = 'aprox';
+    linhas = RESUMO.map((r) => { const d = datasDoPeriodo(r.periodo, r.data); return d && d[0]>=ida && d[1]<=volta ? {...r, datas:r.periodo} : null; }).filter(Boolean);
+    aviso.replaceChildren();
+    const t1 = document.createElement('span');
+    t1.textContent = 'Estas datas ainda não estão sendo monitoradas. Abaixo aparecem só os destinos cuja semana mais barata cai dentro do período ('+linhas.length+' encontrados). Para ter o preço exato de todos os destinos nestas datas a partir da próxima coleta, inclua o período em ';
+    const a = document.createElement('a'); a.href = REPO+'/edit/main/periodos.json'; a.target='_blank'; a.rel='noopener'; a.textContent = 'periodos.json';
+    const t2 = document.createElement('span'); t2.textContent = ' com a linha ';
+    const c = document.createElement('code'); c.textContent = '{"nome": "Minha viagem", "ida": "'+ida+'", "volta": "'+volta+'"}';
+    aviso.append(t1,a,t2,c,document.createTextNode(' (ou peça ao Claude para incluir).'));
+  }
+  [['per-int',(r)=>r.regiao!=='Brasil','int'],['per-nac',(r)=>r.regiao==='Brasil','nac']].forEach(([id,f,k]) => {
+    const tb = document.querySelector('#'+id+' tbody'); tb.replaceChildren();
+    const rs = linhas.filter(f).filter((r)=>r.regiao!=='Brasil'||NACIONAIS.includes(r.destino)).sort((a,b)=>a.preco-b.preco);
+    if (!rs.length) { const tr=document.createElement('tr'), td=document.createElement('td'); td.colSpan=6; td.className='note'; td.textContent='Nenhum destino neste período.'; tr.appendChild(td); tb.appendChild(tr); }
+    rs.forEach((r)=>linhaPer(tb, r, k));
+  });
+}
+function desenharChips(){
+  const box = document.getElementById('per-chips'); box.replaceChildren();
+  if (!PERIODOS.length) return;
+  const n = document.createElement('span'); n.className='note'; n.textContent='Monitorados:'; box.appendChild(n);
+  PERIODOS.forEach((p) => { const b=document.createElement('button'); b.type='button'; b.className='tab';
+    b.textContent = p.nome+': '+dm(p.ida).slice(0,5)+' a '+dm(p.volta);
+    b.addEventListener('click',()=>aplicarPeriodo(p.ida,p.volta)); box.appendChild(b); });
+}
+document.getElementById('per-form').addEventListener('submit',(e)=>{ e.preventDefault(); aplicarPeriodo(document.getElementById('per-ida').value, document.getElementById('per-volta').value); });
+document.getElementById('per-limpar').addEventListener('click',()=>aplicarPeriodo('',''));
+
+const pega = (f) => fetch(f+'?v='+Date.now()).then((r)=>r.ok?r.json():null).catch(()=>null);
+Promise.all([fetch('precos.json?v=' + Date.now()).then((r)=>r.json()), pega('periodos.json'), pega('periodos-precos.json')]).then(([d,per,pp]) => {
   PRECOS = d.rows.filter((r)=>r.regiao!=='Brasil' || NACIONAIS.includes(r.destino));
   RESUMO = resumir(PRECOS); draw();
+  PERIODOS = (per && per.periodos) || []; PPRECOS = (pp && pp.rows) || [];
+  desenharChips();
+  const q = new URLSearchParams(location.search); if (q.get('ida') && q.get('volta')) aplicarPeriodo(q.get('ida'), q.get('volta'));
 }).catch(() => { document.getElementById('take').textContent = 'Não foi possível carregar os preços agora. Tente recarregar a página.'; });
 </script>
 </body>
