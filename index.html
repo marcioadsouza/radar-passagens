@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar de Passagens Brasília</title>
+<meta name="description" content="Acompanhamento diário dos preços de passagens saindo de Brasília para Europa, Estados Unidos, América do Sul e praias do Brasil.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+/* Painel de quadro de embarque: tinta azul-noite, papel de cartão de embarque, âmbar de painel de aeroporto */
+:root{
+  --bg:#F5F3EE;--panel:#FFFFFF;--fg:#14202E;--muted:#5B6675;--line:#DDD8CE;
+  --accent:#C2770E;--ok:#1D7A4F;--bad:#B4352B;--grid:#ECE8E0;
+  --s1:#1F5F99;--s2:#C2770E;--s3:#2E8B6F;--s4:#9A4D9E;--s5:#C2453A;--s6:#4F6B2A;
+  --display:'Fraunces',Georgia,serif;--body:'Instrument Sans',system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0F1720;--panel:#17222E;--fg:#E8EDF2;--muted:#9AA6B2;--line:#2A3846;
+  --accent:#E6A33E;--ok:#5CC08F;--bad:#F07A6E;--grid:#1F2C39;
+  --s1:#6BA8E0;--s2:#E6A33E;--s3:#5CC0A0;--s4:#C68BCB;--s5:#F07A6E;--s6:#A4C26A;
+  color-scheme:dark;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:40px}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600;margin:0}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(32px,5vw,48px);line-height:1.05;margin:6px 0 0;text-wrap:balance}
+.take{margin:12px 0 0;font-size:17px;max-width:70ch}
+.method{margin:8px 0 0;font-size:13px;color:var(--muted);max-width:80ch}
+.jump{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.jump a,.tab{font:inherit;font-size:14px;padding:8px 16px;min-height:40px;display:inline-flex;align-items:center;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);text-decoration:none;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section{display:flex;flex-direction:column;gap:16px;padding-top:24px;border-top:2px solid var(--fg)}
+.sec-h{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:12px}
+h2{font-family:var(--display);font-weight:600;font-size:30px;margin:0}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:4px}
+.card-k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.card-dest{font-weight:600}
+.card-v{font-family:var(--display);font-size:32px;font-variant-numeric:tabular-nums;line-height:1.1}
+.card-d,.card-p{font-size:13px;font-variant-numeric:tabular-nums}
+.card-p{color:var(--muted)}
+.up{color:var(--bad)}.down{color:var(--ok)}.flat{color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0}
+h3{margin:0;font-size:17px;font-weight:600}
+.note{margin:0;font-size:13px;color:var(--muted)}
+.chart{position:relative;min-height:300px}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);padding:6px 10px;font-size:12px;white-space:nowrap}
+.tip .h{color:var(--muted)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search{font:inherit;padding:8px 12px;min-height:40px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);flex:1 1 14rem;min-width:0}
+.tablebox{overflow:auto;max-height:30rem}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:var(--panel);text-align:left;padding:0;border-bottom:1px solid var(--line);z-index:1}
+.th{all:unset;display:block;cursor:pointer;padding:8px 10px;font-size:12px;color:var(--muted);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr[data-key]{cursor:pointer}
+tr[data-key]:hover td,tr.sel td{background:var(--grid)}
+.num{text-align:right}
+footer{font-size:13px;color:var(--muted)}
+@media (max-width:640px){.hide{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Saindo de Brasília</p>
+    <h1>Radar de Passagens Brasília</h1>
+    <p class="take" id="take">Carregando os preços…</p>
+    <p class="method">Preço ida e volta por pessoa, em reais, da viagem de uma semana mais barata nos próximos seis meses, como o Google Voos mostra no Explorar saindo de Brasília. A variação compara com a coleta anterior. Os preços são atualizados uma vez por dia.</p>
+    <nav class="jump" aria-label="Ir para"><a href="#internacional">Internacional</a><a href="#nacional">Nacional</a></nav>
+  </header>
+
+  <section id="internacional">
+    <div class="sec-h"><h2>Internacional</h2><div class="tabs" id="int-tabs" aria-label="Região"></div></div>
+    <div class="cards" id="int-cards"></div>
+    <div class="panel"><h3>Evolução dos preços</h3><p class="note" id="int-chart-note"></p><div class="chart" id="int-chart"></div></div>
+    <div class="panel">
+      <h3>Destinos internacionais</h3>
+      <p class="note">Preço da última coleta, variação e menor preço já registrado. Clique num destino para destacá-lo no gráfico.</p>
+      <div class="tools"><label for="int-q" class="note">Buscar</label><input id="int-q" class="search" type="search" placeholder="Destino"></div>
+      <div class="tablebox"><table id="int-table"><thead><tr>
+        <th><button class="th" data-sort="destino">Destino</button></th>
+        <th class="hide"><button class="th" data-sort="regiao">Região</button></th>
+        <th class="num"><button class="th" data-sort="preco">Preço hoje</button></th>
+        <th class="num"><button class="th" data-sort="variacao">Variação</button></th>
+        <th class="num hide"><button class="th" data-sort="minimo">Menor visto</button></th>
+        <th><button class="th" data-sort="periodo">Datas da viagem</button></th>
+        <th class="hide"><button class="th" data-sort="escalas">Escalas</button></th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="nacional">
+    <div class="sec-h"><h2>Nacional</h2><p class="note">Praias e Foz do Iguaçu</p></div>
+    <div class="cards" id="nac-cards"></div>
+    <div class="panel"><h3>Evolução dos preços</h3><p class="note" id="nac-chart-note"></p><div class="chart" id="nac-chart"></div></div>
+    <div class="panel">
+      <h3>Destinos nacionais</h3>
+      <p class="note">Preço da última coleta, variação e menor preço já registrado. Clique num destino para destacá-lo no gráfico.</p>
+      <div class="tools"><label for="nac-q" class="note">Buscar</label><input id="nac-q" class="search" type="search" placeholder="Destino"></div>
+      <div class="tablebox"><table id="nac-table"><thead><tr>
+        <th><button class="th" data-sort="destino">Destino</button></th>
+        <th class="num"><button class="th" data-sort="preco">Preço hoje</button></th>
+        <th class="num"><button class="th" data-sort="variacao">Variação</button></th>
+        <th class="num hide"><button class="th" data-sort="minimo">Menor visto</button></th>
+        <th><button class="th" data-sort="periodo">Datas da viagem</button></th>
+        <th class="hide"><button class="th" data-sort="escalas">Escalas</button></th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <footer id="rodape">Fonte: Google Voos, Explorar a partir de Brasília.</footer>
+</div>
+
+<script>
+const NACIONAIS = ['Rio de Janeiro','Salvador','Florianópolis','Fernando de Noronha','Recife','Fortaleza','Foz do Iguaçu','Natal','São Luís','Maceió','João Pessoa','Porto Seguro','Aracaju','Vitória','Ilhéus','Navegantes'];
+const REGIOES = ['Europa','Estados Unidos','América do Sul'];
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const CORES = ['--s1','--s2','--s3','--s4','--s5','--s6'];
+const brl = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR');
+const delta = (v) => v == null ? 'primeira coleta' : v === 0 ? 'sem mudança' : (v > 0 ? '+' : '−') + brl(Math.abs(v));
+const cls = (v) => v == null || v === 0 ? 'flat' : v > 0 ? 'up' : 'down';
+let PRECOS = [], RESUMO = [];
+const SEC = {
+  int:{tipo:'Internacional',regiao:'Todas',sort:'preco',dir:1,q:'',sel:null},
+  nac:{tipo:'Nacional',regiao:'Todas',sort:'preco',dir:1,q:'',sel:null}
+};
+
+function resumir(precos){
+  const por = {};
+  precos.forEach((r) => { (por[r.destino] = por[r.destino] || []).push(r); });
+  return Object.values(por).map((l) => {
+    l.sort((a,b) => a.data < b.data ? -1 : 1);
+    const u = l[l.length-1], a = l.length > 1 ? l[l.length-2] : null;
+    return {destino:u.destino,regiao:u.regiao,tipo:u.regiao==='Brasil'?'Nacional':'Internacional',preco:+u.preco,
+      variacao:a?(+u.preco)-(+a.preco):null,minimo:Math.min(...l.map((r)=>+r.preco)),periodo:u.periodo,escalas:u.escalas,data:u.data};
+  });
+}
+
+function card(rotulo, r){
+  const el = document.createElement('div'); el.className = 'card';
+  const add = (c,t) => { const s = document.createElement('span'); s.className = c; s.textContent = t; el.appendChild(s); };
+  add('card-k', rotulo); add('card-dest', r ? r.destino : '—'); add('card-v', r ? brl(r.preco) : '—');
+  add('card-d ' + cls(r ? r.variacao : null), r ? delta(r.variacao) : '—'); add('card-p', r ? r.periodo : '');
+  return el;
+}
+
+function drawCards(){
+  const ib = document.getElementById('int-cards'); ib.replaceChildren();
+  REGIOES.forEach((g) => ib.appendChild(card(g, RESUMO.filter((r)=>r.regiao===g).sort((a,b)=>a.preco-b.preco)[0])));
+  const nb = document.getElementById('nac-cards'); nb.replaceChildren();
+  RESUMO.filter((r)=>r.tipo==='Nacional').sort((a,b)=>a.preco-b.preco).slice(0,3)
+    .forEach((r,i) => nb.appendChild(card(i===0?'Mais barato':(i+1)+'º mais barato', r)));
+}
+
+function drawTable(k){
+  const s = SEC[k], tbody = document.querySelector('#'+k+'-table tbody');
+  tbody.replaceChildren();
+  let rows = RESUMO.filter((r)=>r.tipo===s.tipo && (s.regiao==='Todas'||r.regiao===s.regiao));
+  if (s.q) rows = rows.filter((r)=>r.destino.toLowerCase().includes(s.q));
+  rows.sort((a,b) => { const x=a[s.sort], y=b[s.sort]; if (x==null) return 1; if (y==null) return -1;
+    return (typeof x==='number'?x-y:String(x).localeCompare(String(y),'pt-BR'))*s.dir; });
+  document.querySelectorAll('#'+k+'-table th').forEach((th) => { const c = th.querySelector('.th').dataset.sort;
+    th.setAttribute('aria-sort', c===s.sort ? (s.dir>0?'ascending':'descending') : 'none'); });
+  rows.forEach((r) => {
+    const tr = document.createElement('tr'); tr.dataset.key = r.destino; if (s.sel===r.destino) tr.className = 'sel';
+    const cells = [[r.destino,'']]; if (k==='int') cells.push([r.regiao,'hide']);
+    cells.push([brl(r.preco),'num'],[delta(r.variacao),'num '+cls(r.variacao)],[brl(r.minimo),'num hide'],[r.periodo,''],[r.escalas,'hide']);
+    cells.forEach(([t,c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+    tbody.appendChild(tr);
+  });
+}
+
+function drawChart(k){
+  const s = SEC[k], box = document.getElementById(k+'-chart'); box.replaceChildren();
+  let foco = RESUMO.filter((r)=>r.tipo===s.tipo && (s.regiao==='Todas'||r.regiao===s.regiao)).sort((a,b)=>a.preco-b.preco).slice(0,6).map((r)=>r.destino);
+  if (s.sel && !foco.includes(s.sel)) foco = [s.sel].concat(foco.slice(0,5));
+  document.getElementById(k+'-chart-note').textContent = 'Os 6 destinos ' + (k==='int' ? (s.regiao==='Todas'?'internacionais':'de '+s.regiao) : 'nacionais') + ' mais baratos hoje.';
+  const series = foco.map((d,i) => ({dest:d,cor:css(CORES[i%CORES.length]),
+    pts:PRECOS.filter((r)=>r.destino===d).map((r)=>({t:new Date(r.data+'T12:00:00Z'),v:+r.preco,periodo:r.periodo})).sort((a,b)=>a.t-b.t)}));
+  const all = series.flatMap((x)=>x.pts); if (!all.length) return;
+  const W = Math.max(280, box.clientWidth), H = 300;
+  const svg = d3.select(box).append('svg').attr('width','100%').attr('viewBox',`0 0 ${W} ${H}`).attr('role','img').attr('aria-label','Evolução dos preços por destino');
+  const fmt = (v) => 'R$ ' + d3.format(',.0f')(v).replace(/,/g,'.');
+  const y = d3.scaleLinear(d3.extent(all,(p)=>p.v),[0,0]).nice(), yT = y.ticks(5);
+  const tmp = svg.append('text').attr('font-size',12).text(fmt(d3.max(yT))); const yW = tmp.node().getComputedTextLength()+10; tmp.remove();
+  const labW = Math.min(170, W*0.36), m = {l:yW,r:labW,t:12,b:28};
+  const tE = d3.extent(all,(p)=>p.t); if (+tE[0]===+tE[1]) { tE[0]=d3.utcDay.offset(tE[0],-1); tE[1]=d3.utcDay.offset(tE[1],1); }
+  const x = d3.scaleUtc(tE,[m.l,W-m.r]); y.range([H-m.b,m.t]);
+  const muted = css('--muted'), grid = css('--grid');
+  svg.append('g').selectAll('line').data(yT).join('line').attr('x1',m.l).attr('x2',W-m.r).attr('y1',(v)=>y(v)).attr('y2',(v)=>y(v)).attr('stroke',grid);
+  svg.append('g').selectAll('text').data(yT).join('text').attr('x',m.l-8).attr('y',(v)=>y(v)).attr('dy','0.32em').attr('text-anchor','end').attr('font-size',12).attr('fill',muted).text(fmt);
+  const dias = Array.from(new Set(all.map((p)=>+p.t))).sort().map((t)=>new Date(t));
+  const step = Math.max(1, Math.ceil(dias.length / Math.max(2, Math.floor((W-m.l-m.r)/70))));
+  svg.append('g').selectAll('text').data(dias.filter((_,i)=>i%step===0)).join('text').attr('x',(t)=>x(t)).attr('y',H-8).attr('text-anchor','middle').attr('font-size',12).attr('fill',muted).text(d3.utcFormat('%d/%m'));
+  const line = d3.line().x((p)=>x(p.t)).y((p)=>y(p.v)), ends = [];
+  series.forEach((sr) => {
+    const fraco = s.sel && s.sel!==sr.dest, g = svg.append('g').attr('opacity',fraco?0.25:1);
+    g.append('path').datum(sr.pts).attr('d',line).attr('fill','none').attr('stroke',sr.cor).attr('stroke-width',s.sel===sr.dest?3:2).attr('stroke-linecap','round').attr('stroke-linejoin','round');
+    g.selectAll('circle').data(sr.pts).join('circle').attr('cx',(p)=>x(p.t)).attr('cy',(p)=>y(p.v)).attr('r',3.5).attr('fill',sr.cor);
+    const last = sr.pts[sr.pts.length-1]; ends.push({y:y(last.v),txt:sr.dest+' '+fmt(last.v),cor:sr.cor,fraco});
+  });
+  ends.sort((a,b)=>a.y-b.y); for (let i=1;i<ends.length;i++) if (ends[i].y-ends[i-1].y<15) ends[i].y = ends[i-1].y+15;
+  const over = ends.length ? ends[ends.length-1].y-(H-m.b) : 0; if (over>0) ends.forEach((e)=>{e.y-=over;});
+  svg.append('g').selectAll('text').data(ends).join('text').attr('x',W-m.r+8).attr('y',(e)=>e.y).attr('dy','0.32em').attr('font-size',12).attr('fill',(e)=>e.cor).attr('opacity',(e)=>e.fraco?0.35:1).text((e)=>e.txt)
+    .each(function(){ const n=this; let t=n.textContent; while (n.getComputedTextLength()>labW-10 && t.length>4){ t=t.slice(0,-2); n.textContent=t+'…'; } });
+  const tip = document.createElement('div'); tip.className='tip'; tip.hidden=true; box.appendChild(tip);
+  const pts = series.flatMap((sr)=>sr.pts.map((p)=>({...p,dest:sr.dest})));
+  svg.on('pointermove',(ev) => {
+    const [mx,my] = d3.pointer(ev), b = d3.least(pts,(p)=>Math.hypot(x(p.t)-mx,y(p.v)-my));
+    if (!b || Math.hypot(x(b.t)-mx,y(b.v)-my)>40) { tip.hidden=true; return; }
+    tip.replaceChildren();
+    [[d3.utcFormat('%d/%m/%Y')(b.t),'h'],[b.dest+': '+brl(b.v),''],[b.periodo,'h']].forEach(([t,c])=>{ const d=document.createElement('div'); d.textContent=t; if(c) d.className=c; tip.appendChild(d); });
+    tip.hidden=false; const sx = box.clientWidth/W;
+    let left = x(b.t)*sx+12; if (left+tip.offsetWidth>box.clientWidth) left = x(b.t)*sx-tip.offsetWidth-12;
+    tip.style.left = Math.max(0,left)+'px'; tip.style.top = Math.max(0,y(b.v)*sx-20)+'px';
+  }).on('pointerleave',()=>{ tip.hidden=true; });
+}
+
+function drawTake(){
+  const b = (tipo) => RESUMO.filter((r)=>r.tipo===tipo).sort((a,c)=>a.preco-c.preco)[0];
+  const i = b('Internacional'), n = b('Nacional');
+  const subiu = RESUMO.filter((r)=>r.variacao>0).length, caiu = RESUMO.filter((r)=>r.variacao<0).length;
+  const d = RESUMO.map((r)=>r.data).sort().pop() || '';
+  const f = (r) => r ? r.destino+' por '+brl(r.preco) : '—';
+  document.getElementById('take').textContent = 'Coleta de '+d.slice(8,10)+'/'+d.slice(5,7)+'. Internacional mais barato: '+f(i)+'. Nacional mais barato: '+f(n)+'. Desde a coleta anterior, '+subiu+' destinos subiram e '+caiu+' caíram.';
+  document.getElementById('rodape').textContent = 'Fonte: Google Voos, Explorar a partir de Brasília. Última coleta em '+d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4)+'.';
+}
+
+function draw(){
+  document.querySelectorAll('#int-tabs .tab').forEach((t)=>t.setAttribute('aria-pressed',String(t.textContent===SEC.int.regiao)));
+  drawTake(); drawCards(); ['int','nac'].forEach((k)=>{ drawTable(k); drawChart(k); });
+}
+
+const tabs = document.getElementById('int-tabs');
+['Todas'].concat(REGIOES).forEach((nome) => { const b=document.createElement('button'); b.className='tab'; b.type='button'; b.textContent=nome;
+  b.addEventListener('click',()=>{ SEC.int.regiao=nome; SEC.int.sel=null; draw(); }); tabs.appendChild(b); });
+Object.keys(SEC).forEach((k) => {
+  const s = SEC[k];
+  document.getElementById(k+'-q').addEventListener('input',(e)=>{ s.q=e.target.value.toLowerCase(); draw(); });
+  document.querySelectorAll('#'+k+'-table .th').forEach((b)=>b.addEventListener('click',()=>{ const c=b.dataset.sort; if (s.sort===c) s.dir*=-1; else { s.sort=c; s.dir=1; } draw(); }));
+  document.querySelector('#'+k+'-table tbody').addEventListener('click',(e)=>{ const tr=e.target.closest('tr[data-key]'); if (!tr) return; s.sel = s.sel===tr.dataset.key?null:tr.dataset.key; draw(); });
+});
+let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(draw,150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+
+fetch('precos.json?v=' + Date.now()).then((r)=>r.json()).then((d) => {
+  PRECOS = d.rows.filter((r)=>r.regiao!=='Brasil' || NACIONAIS.includes(r.destino));
+  RESUMO = resumir(PRECOS); draw();
+}).catch(() => { document.getElementById('take').textContent = 'Não foi possível carregar os preços agora. Tente recarregar a página.'; });
+</script>
+</body>
+</html>
