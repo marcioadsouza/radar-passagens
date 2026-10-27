@@ -331,12 +331,8 @@ function aplicarPeriodo(ida, volta){
     modo = 'aprox';
     linhas = RESUMO.map((r) => { const d = datasDoPeriodo(r.periodo, r.data); return d && d[0]>=ida && d[1]<=volta ? {...r, datas:r.periodo} : null; }).filter(Boolean);
     aviso.replaceChildren();
-    const t1 = document.createElement('span');
-    t1.textContent = 'Estas datas ainda não estão sendo monitoradas. Abaixo aparecem só os destinos cuja semana mais barata cai dentro do período ('+linhas.length+' encontrados). Para ter o preço exato de todos os destinos nestas datas a partir da próxima coleta, inclua o período em ';
-    const a = document.createElement('a'); a.href = REPO+'/edit/main/periodos.json'; a.target='_blank'; a.rel='noopener'; a.textContent = 'periodos.json';
-    const t2 = document.createElement('span'); t2.textContent = ' com a linha ';
-    const c = document.createElement('code'); c.textContent = '{"nome": "Minha viagem", "ida": "'+ida+'", "volta": "'+volta+'"}';
-    aviso.append(t1,a,t2,c,document.createTextNode(' (ou peça ao Claude para incluir).'));
+    const c = document.createElement('code'); c.textContent = dm(ida)+' a '+dm(volta);
+    aviso.append('Estas datas ainda não estão sendo monitoradas. Abaixo aparecem só os destinos cuja semana mais barata cai dentro do período ('+linhas.length+' encontrados). Para ter o preço exato de todos os destinos a partir da próxima coleta, peça ao Claude para monitorar ', c, '.');
   }
   [['per-int',(r)=>r.regiao!=='Brasil','int'],['per-nac',(r)=>r.regiao==='Brasil','nac']].forEach(([id,f,k]) => {
     const tb = document.querySelector('#'+id+' tbody'); tb.replaceChildren();
@@ -360,7 +356,7 @@ const pega = (f) => fetch(f+'?v='+Date.now()).then((r)=>r.ok?r.json():null).catc
 Promise.all([fetch('precos.json?v=' + Date.now()).then((r)=>r.json()), pega('periodos.json'), pega('periodos-precos.json')]).then(([d,per,pp]) => {
   PRECOS = d.rows.filter((r)=>r.regiao!=='Brasil' || NACIONAIS.includes(r.destino));
   RESUMO = resumir(PRECOS); draw();
-  PERIODOS = (per && per.periodos) || []; PPRECOS = (pp && pp.rows) || [];
+  PERIODOS = (per && (per.rows || per.periodos)) || []; PPRECOS = (pp && pp.rows) || [];
   desenharChips();
   const q = new URLSearchParams(location.search); if (q.get('ida') && q.get('volta')) aplicarPeriodo(q.get('ida'), q.get('volta'));
 }).catch(() => { document.getElementById('take').textContent = 'Não foi possível carregar os preços agora. Tente recarregar a página.'; });
